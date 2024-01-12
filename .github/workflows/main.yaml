@@ -30,7 +30,7 @@ jobs:
             export TARGET_ARCH=$arch
 
             make cloudflared
-            mv ./cloudflared $ARTIFACT_DIR/cloudflared-freebsd-$arch
+            mv ./cloudflared built_artifacts/cloudflared-freebsd-$arch
           done
       - name: Release
         uses: softprops/action-gh-release@v1
