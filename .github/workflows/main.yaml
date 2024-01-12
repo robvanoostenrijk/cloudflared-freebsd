@@ -1,0 +1,44 @@
+name: Build & Upload Artifacts
+
+on:
+  push:
+    tags:
+      - '*'
+jobs:
+  build-container-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build cloudflared for FreeBSD
+    if: github.event_name == 'push'
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.21.x
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Build
+        shell: bash
+        run: |
+          # Disable FIPS module in go-boring
+          export GOEXPERIMENT=noboringcrypto
+          export CGO_ENABLED=0
+
+          mkdir -p built_artifacts/
+
+          freebsdArchs=("386" "amd64" "arm" "arm64")
+          export TARGET_OS=freebsd
+
+          for arch in ${freebsdArchs[@]}; do
+           export TARGET_ARCH=$arch
+
+           make cloudflared
+           mv ./cloudflared $ARTIFACT_DIR/cloudflared-freebsd-$arch
+         done
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            built_artifacts/cloudflared-freebsd-aarch64.tar.xz
+            built_artifacts/cloudflared-freebsd-amd64.tar.xz
+            built_artifacts/cloudflared-freebsd-armv7.tar.xz
+            built_artifacts/cloudflared-freebsd-i386.tar.xz
