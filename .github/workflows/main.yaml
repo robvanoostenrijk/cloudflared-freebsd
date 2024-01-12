@@ -1,5 +1,4 @@
 name: Build & Upload Artifacts
-
 on:
   push:
     tags:
@@ -29,11 +28,11 @@ jobs:
           export TARGET_OS=freebsd
 
           for arch in ${freebsdArchs[@]}; do
-           export TARGET_ARCH=$arch
+            export TARGET_ARCH=$arch
 
-           make cloudflared
-           mv ./cloudflared $ARTIFACT_DIR/cloudflared-freebsd-$arch
-         done
+            make cloudflared
+            mv ./cloudflared $ARTIFACT_DIR/cloudflared-freebsd-$arch
+          done
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
