@@ -31,6 +31,7 @@ jobs:
 
             make cloudflared
             mv ./cloudflared built_artifacts/cloudflared-freebsd-$arch
+            tar -cJf built_artifacts/cloudflared-freebsd-$arch.tar.xz built_artifacts/cloudflared-freebsd-$arch
           done
       - name: Release
         uses: softprops/action-gh-release@v1
