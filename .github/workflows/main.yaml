@@ -9,22 +9,13 @@ jobs:
     name: Build cloudflared for FreeBSD
     if: github.event_name == 'push'
     steps:
-      - name: Install cloudflare Go
-        shell: bash
-        run: |
-          pwd
-          git clone https://github.com/cloudflare/go
-          cd go/src
-          ./make.bash
-
-          pwd
-          cd ../../
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Build
         shell: bash
         run: |
-          pwd
+          # Install cloudflare-go
+          ./.teamcity/install-cloudflare-go.sh
 
           # Disable FIPS module in go-boring
           export GOEXPERIMENT=noboringcrypto
