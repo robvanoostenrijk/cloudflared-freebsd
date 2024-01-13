@@ -27,8 +27,10 @@ jobs:
           for arch in ${freebsdArchs[@]}; do
             export TARGET_ARCH=$arch
 
+            echo "Building cloudflared-freebsd-$arch"
+
             make cloudflared
-            tar -cJf cloudflared-freebsd-$arch.tar.xz ./cloudflared 
+            tar -cJvf cloudflared-freebsd-$arch.tar.xz ./cloudflared 
             rm ./cloudflared
           done
       - name: Release
