@@ -30,7 +30,7 @@ jobs:
             make cloudflared
             strip ./cloudflared
             tar -cJf cloudflared-freebsd-$arch.tar.xz ./cloudflared 
-	    rm ./cloudflared
+            rm ./cloudflared
           done
       - name: Release
         uses: softprops/action-gh-release@v1
