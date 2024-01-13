@@ -30,14 +30,14 @@ jobs:
             echo "Building cloudflared-freebsd-$arch"
 
             make cloudflared
-            tar -cJvf cloudflared-freebsd-$arch.tar.xz ./cloudflared 
+            tar -cJvf /tmp/cloudflared-freebsd-$arch.tar.xz ./cloudflared 
             rm ./cloudflared
           done
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            cloudflared-freebsd-aarch64.tar.xz
-            cloudflared-freebsd-amd64.tar.xz
-            cloudflared-freebsd-armv7.tar.xz
-            cloudflared-freebsd-i386.tar.xz
+            /tmp/cloudflared-freebsd-arm64.tar.xz
+            /tmp/cloudflared-freebsd-amd64.tar.xz
+            /tmp/cloudflared-freebsd-386.tar.xz
+            /tmp/cloudflared-freebsd-arm.tar.xz
