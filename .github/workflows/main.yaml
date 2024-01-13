@@ -21,8 +21,6 @@ jobs:
           export GOEXPERIMENT=noboringcrypto
           export CGO_ENABLED=0
 
-          mkdir -p built_artifacts/
-
           freebsdArchs=("386" "amd64" "arm" "arm64")
           export TARGET_OS=freebsd
 
@@ -30,14 +28,15 @@ jobs:
             export TARGET_ARCH=$arch
 
             make cloudflared
-            mv ./cloudflared built_artifacts/cloudflared-freebsd-$arch
-            tar -cJf built_artifacts/cloudflared-freebsd-$arch.tar.xz built_artifacts/cloudflared-freebsd-$arch
+            strip ./cloudflared
+            tar -cJf cloudflared-freebsd-$arch.tar.xz ./cloudflared 
+	    rm ./cloudflared
           done
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            built_artifacts/cloudflared-freebsd-aarch64.tar.xz
-            built_artifacts/cloudflared-freebsd-amd64.tar.xz
-            built_artifacts/cloudflared-freebsd-armv7.tar.xz
-            built_artifacts/cloudflared-freebsd-i386.tar.xz
+            cloudflared-freebsd-aarch64.tar.xz
+            cloudflared-freebsd-amd64.tar.xz
+            cloudflared-freebsd-armv7.tar.xz
+            cloudflared-freebsd-i386.tar.xz
