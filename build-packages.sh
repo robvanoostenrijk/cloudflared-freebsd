@@ -1,9 +1,7 @@
-#!/bin/bash
 VERSION=$(git describe --tags --always --match "[0-9][0-9][0-9][0-9].*.*")
 echo $VERSION
 
-# Disable FIPS module in go-boring
-export GOEXPERIMENT=noboringcrypto
+# Avoid depending on C code since we don't need it.
 export CGO_ENABLED=0
 
 # This controls the directory the built artifacts go into
@@ -39,13 +37,4 @@ for arch in ${linuxArchs[@]}; do
 
     # finally move the linux binary as well.
     mv ./cloudflared $ARTIFACT_DIR/cloudflared-linux-$arch
-done
-
-freebsdArchs=("386" "amd64" "arm" "arm64")
-export TARGET_OS=freebsd
-for arch in ${linuxArchs[@]}; do
-    export TARGET_ARCH=$arch
-    
-    make cloudflared
-    mv ./cloudflared $ARTIFACT_DIR/cloudflared-freebsd-$arch
 done
