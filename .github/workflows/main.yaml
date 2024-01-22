@@ -44,7 +44,7 @@ jobs:
           echo "Building cloudflared-$TARGET_OS-$TARGET_ARCH$TARGET_ARM"
 
           make cloudflared
-          mv ./cloudflared /tmp/cloudflared-$TARGET_OS-$TARGET_ARCH$TARGET_ARM
+          mv ./cloudflared /tmp/cloudflared-linux-arm7
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
