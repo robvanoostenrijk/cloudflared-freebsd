@@ -37,9 +37,9 @@ jobs:
             echo "    cloudflared-freebsd-$arch: $(sha256sum /tmp/cloudflared-freebsd-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
           done
 
-          TARGET_OS=linux
-          TARGET_ARCH=arm
-          TARGET_ARM=7
+          TARGET_OS="linux"
+          GOARCH=arm
+          GOARM=7
 
           echo "Building cloudflared-$TARGET_OS-$TARGET_ARCH$TARGET_ARM"
 
