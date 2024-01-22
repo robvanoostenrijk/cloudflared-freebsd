@@ -37,7 +37,14 @@ jobs:
             echo "    cloudflared-freebsd-$arch: $(sha256sum /tmp/cloudflared-freebsd-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
           done
 
-          GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=1 go build ./cmd/cloudflared
+          TARGET_OS=linux
+          TARGET_ARCH=arm
+          TARGET_ARM=7
+
+          echo "Building cloudflared-$TARGET_OS-$TARGET_ARCH$TARGET_ARM"
+
+          make cloudflared
+          mv ./cloudflared /tmp/cloudflared-$TARGET_OS-$TARGET_ARCH$TARGET_ARM
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -47,3 +54,4 @@ jobs:
             /tmp/cloudflared-freebsd-amd64
             /tmp/cloudflared-freebsd-arm
             /tmp/cloudflared-freebsd-arm64
+            /tmp/cloudflared-linux-arm7
