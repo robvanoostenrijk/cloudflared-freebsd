@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/quic-go/quic-go"
 	"github.com/rs/zerolog"
@@ -27,8 +26,7 @@ import (
 	quicpogs "github.com/cloudflare/cloudflared/quic"
 	"github.com/cloudflare/cloudflared/retry"
 	"github.com/cloudflare/cloudflared/signal"
-	"github.com/cloudflare/cloudflared/tunnelrpc"
-	tunnelpogs "github.com/cloudflare/cloudflared/tunnelrpc/pogs"
+	"github.com/cloudflare/cloudflared/tunnelrpc/pogs"
 	"github.com/cloudflare/cloudflared/tunnelstate"
 )
 
@@ -49,7 +47,7 @@ type TunnelConfig struct {
 	HAConnections      int
 	IsAutoupdated      bool
 	LBPool             string
-	Tags               []tunnelpogs.Tag
+	Tags               []pogs.Tag
 	Log                *zerolog.Logger
 	LogTransport       *zerolog.Logger
 	Observer           *connection.Observer
@@ -60,47 +58,25 @@ type TunnelConfig struct {
 
 	NeedPQ bool
 
-	NamedTunnel      *connection.NamedTunnelProperties
+	NamedTunnel      *connection.TunnelProperties
 	ProtocolSelector connection.ProtocolSelector
 	EdgeTLSConfigs   map[connection.Protocol]*tls.Config
 	PacketConfig     *ingress.GlobalRouterConfig
 
-	UDPUnregisterSessionTimeout time.Duration
-	WriteStreamTimeout          time.Duration
+	RPCTimeout         time.Duration
+	WriteStreamTimeout time.Duration
 
 	DisableQUICPathMTUDiscovery bool
 
 	FeatureSelector *features.FeatureSelector
 }
 
-func (c *TunnelConfig) registrationOptions(connectionID uint8, OriginLocalIP string, uuid uuid.UUID) *tunnelpogs.RegistrationOptions {
-	policy := tunnelrpc.ExistingTunnelPolicy_balance
-	if c.HAConnections <= 1 && c.LBPool == "" {
-		policy = tunnelrpc.ExistingTunnelPolicy_disconnect
-	}
-	return &tunnelpogs.RegistrationOptions{
-		ClientID:             c.ClientID,
-		Version:              c.ReportedVersion,
-		OS:                   c.OSArch,
-		ExistingTunnelPolicy: policy,
-		PoolName:             c.LBPool,
-		Tags:                 c.Tags,
-		ConnectionID:         connectionID,
-		OriginLocalIP:        OriginLocalIP,
-		IsAutoupdated:        c.IsAutoupdated,
-		RunFromTerminal:      c.RunFromTerminal,
-		CompressionQuality:   0,
-		UUID:                 uuid.String(),
-		Features:             c.SupportedFeatures(),
-	}
-}
-
-func (c *TunnelConfig) connectionOptions(originLocalAddr string, numPreviousAttempts uint8) *tunnelpogs.ConnectionOptions {
+func (c *TunnelConfig) connectionOptions(originLocalAddr string, numPreviousAttempts uint8) *pogs.ConnectionOptions {
 	// attempt to parse out origin IP, but don't fail since it's informational field
 	host, _, _ := net.SplitHostPort(originLocalAddr)
 	originIP := net.ParseIP(host)
 
-	return &tunnelpogs.ConnectionOptions{
+	return &pogs.ConnectionOptions{
 		Client:              c.NamedTunnel.Client,
 		OriginLocalIP:       originIP,
 		ReplaceExisting:     c.ReplaceExisting,
@@ -203,7 +179,6 @@ func (f *ipAddrFallback) ShouldGetNewAddress(connIndex uint8, err error) (needsN
 type EdgeTunnelServer struct {
 	config            *TunnelConfig
 	orchestrator      *orchestration.Orchestrator
-	credentialManager *reconnectCredentialManager
 	edgeAddrHandler   EdgeAddrHandler
 	edgeAddrs         *edgediscovery.Edge
 	edgeBindAddr      net.IP
@@ -479,6 +454,7 @@ func (e *EdgeTunnelServer) serveConnection(
 		connIndex,
 		addr.UDP.IP,
 		nil,
+		e.config.RPCTimeout,
 		e.gracefulShutdownC,
 		e.config.GracePeriod,
 		protocol,
@@ -531,7 +507,7 @@ func (e *EdgeTunnelServer) serveHTTP2(
 	ctx context.Context,
 	connLog *ConnAwareLogger,
 	tlsServerConn net.Conn,
-	connOptions *tunnelpogs.ConnectionOptions,
+	connOptions *pogs.ConnectionOptions,
 	controlStreamHandler connection.ControlStreamHandler,
 	connIndex uint8,
 ) error {
@@ -573,7 +549,7 @@ func (e *EdgeTunnelServer) serveQUIC(
 	ctx context.Context,
 	edgeAddr *net.UDPAddr,
 	connLogger *ConnAwareLogger,
-	connOptions *tunnelpogs.ConnectionOptions,
+	connOptions *pogs.ConnectionOptions,
 	controlStreamHandler connection.ControlStreamHandler,
 	connIndex uint8,
 ) (err error, recoverable bool) {
@@ -614,7 +590,7 @@ func (e *EdgeTunnelServer) serveQUIC(
 		controlStreamHandler,
 		connLogger.Logger(),
 		e.config.PacketConfig,
-		e.config.UDPUnregisterSessionTimeout,
+		e.config.RPCTimeout,
 		e.config.WriteStreamTimeout,
 	)
 	if err != nil {
