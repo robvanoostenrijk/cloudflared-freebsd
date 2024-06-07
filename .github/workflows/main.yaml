@@ -9,14 +9,15 @@ jobs:
     name: Build cloudflared for FreeBSD
     if: github.event_name == 'push'
     steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+        go-version: 1.22.x
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Build
         shell: bash
         run: |
-          # Install cloudflare-go
-          ./.teamcity/install-cloudflare-go.sh
-
           # Disable FIPS module in go-boring
           export GOEXPERIMENT=noboringcrypto
           export CGO_ENABLED=0
@@ -45,4 +46,3 @@ jobs:
             /tmp/cloudflared-freebsd-amd64
             /tmp/cloudflared-freebsd-arm
             /tmp/cloudflared-freebsd-arm64
-
