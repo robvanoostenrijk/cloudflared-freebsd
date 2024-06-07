@@ -12,12 +12,18 @@ import (
 	"zombiezen.com/go/capnproto2/rpc"
 	"zombiezen.com/go/capnproto2/server"
 
-	"github.com/cloudflare/cloudflared/tunnelrpc"
+	"github.com/cloudflare/cloudflared/tunnelrpc/metrics"
+	"github.com/cloudflare/cloudflared/tunnelrpc/proto"
 )
 
 type RegistrationServer interface {
+	// RegisterConnection is the call typically handled by the edge to initiate and authenticate a new connection
+	// for cloudflared.
 	RegisterConnection(ctx context.Context, auth TunnelAuth, tunnelID uuid.UUID, connIndex byte, options *ConnectionOptions) (*ConnectionDetails, error)
+	// UnregisterConnection is the call typically handled by the edge to close an existing connection for cloudflared.
 	UnregisterConnection(ctx context.Context)
+	// UpdateLocalConfiguration is the call typically handled by the edge for cloudflared to provide the current
+	// configuration it is operating with.
 	UpdateLocalConfiguration(ctx context.Context, config []byte) error
 }
 
@@ -25,11 +31,15 @@ type RegistrationServer_PogsImpl struct {
 	impl RegistrationServer
 }
 
-func RegistrationServer_ServerToClient(s RegistrationServer) tunnelrpc.RegistrationServer {
-	return tunnelrpc.RegistrationServer_ServerToClient(RegistrationServer_PogsImpl{s})
+func RegistrationServer_ServerToClient(s RegistrationServer) proto.RegistrationServer {
+	return proto.RegistrationServer_ServerToClient(RegistrationServer_PogsImpl{s})
 }
 
-func (i RegistrationServer_PogsImpl) RegisterConnection(p tunnelrpc.RegistrationServer_registerConnection) error {
+func (i RegistrationServer_PogsImpl) RegisterConnection(p proto.RegistrationServer_registerConnection) error {
+	return metrics.ObserveServerHandler(func() error { return i.registerConnection(p) }, metrics.Registration, metrics.OperationRegisterConnection)
+}
+
+func (i RegistrationServer_PogsImpl) registerConnection(p proto.RegistrationServer_registerConnection) error {
 	server.Ack(p.Options)
 
 	auth, err := p.Params.Auth()
@@ -82,14 +92,19 @@ func (i RegistrationServer_PogsImpl) RegisterConnection(p tunnelrpc.Registration
 	}
 }
 
-func (i RegistrationServer_PogsImpl) UnregisterConnection(p tunnelrpc.RegistrationServer_unregisterConnection) error {
-	server.Ack(p.Options)
-
-	i.impl.UnregisterConnection(p.Ctx)
-	return nil
+func (i RegistrationServer_PogsImpl) UnregisterConnection(p proto.RegistrationServer_unregisterConnection) error {
+	return metrics.ObserveServerHandler(func() error {
+		server.Ack(p.Options)
+		i.impl.UnregisterConnection(p.Ctx)
+		return nil // No metrics will be reported for failure as this method has no return value
+	}, metrics.Registration, metrics.OperationUnregisterConnection)
 }
 
-func (i RegistrationServer_PogsImpl) UpdateLocalConfiguration(c tunnelrpc.RegistrationServer_updateLocalConfiguration) error {
+func (i RegistrationServer_PogsImpl) UpdateLocalConfiguration(p proto.RegistrationServer_updateLocalConfiguration) error {
+	return metrics.ObserveServerHandler(func() error { return i.updateLocalConfiguration(p) }, metrics.Registration, metrics.OperationUpdateLocalConfiguration)
+}
+
+func (i RegistrationServer_PogsImpl) updateLocalConfiguration(c proto.RegistrationServer_updateLocalConfiguration) error {
 	server.Ack(c.Options)
 
 	configBytes, err := c.Params.Config()
@@ -105,14 +120,21 @@ type RegistrationServer_PogsClient struct {
 	Conn   *rpc.Conn
 }
 
+func NewRegistrationServer_PogsClient(client capnp.Client, conn *rpc.Conn) RegistrationServer_PogsClient {
+	return RegistrationServer_PogsClient{
+		Client: client,
+		Conn:   conn,
+	}
+}
+
 func (c RegistrationServer_PogsClient) Close() error {
 	c.Client.Close()
 	return c.Conn.Close()
 }
 
 func (c RegistrationServer_PogsClient) RegisterConnection(ctx context.Context, auth TunnelAuth, tunnelID uuid.UUID, connIndex byte, options *ConnectionOptions) (*ConnectionDetails, error) {
-	client := tunnelrpc.TunnelServer{Client: c.Client}
-	promise := client.RegisterConnection(ctx, func(p tunnelrpc.RegistrationServer_registerConnection_Params) error {
+	client := proto.TunnelServer{Client: c.Client}
+	promise := client.RegisterConnection(ctx, func(p proto.RegistrationServer_registerConnection_Params) error {
 		tunnelAuth, err := p.NewAuth()
 		if err != nil {
 			return err
@@ -145,7 +167,7 @@ func (c RegistrationServer_PogsClient) RegisterConnection(ctx context.Context, a
 	}
 	result := response.Result()
 	switch result.Which() {
-	case tunnelrpc.ConnectionResponse_result_Which_error:
+	case proto.ConnectionResponse_result_Which_error:
 		resultError, err := result.Error()
 		if err != nil {
 			return nil, wrapRPCError(err)
@@ -160,7 +182,7 @@ func (c RegistrationServer_PogsClient) RegisterConnection(ctx context.Context, a
 		}
 		return nil, err
 
-	case tunnelrpc.ConnectionResponse_result_Which_connectionDetails:
+	case proto.ConnectionResponse_result_Which_connectionDetails:
 		connDetails, err := result.ConnectionDetails()
 		if err != nil {
 			return nil, wrapRPCError(err)
@@ -176,8 +198,8 @@ func (c RegistrationServer_PogsClient) RegisterConnection(ctx context.Context, a
 }
 
 func (c RegistrationServer_PogsClient) SendLocalConfiguration(ctx context.Context, config []byte) error {
-	client := tunnelrpc.TunnelServer{Client: c.Client}
-	promise := client.UpdateLocalConfiguration(ctx, func(p tunnelrpc.RegistrationServer_updateLocalConfiguration_Params) error {
+	client := proto.TunnelServer{Client: c.Client}
+	promise := client.UpdateLocalConfiguration(ctx, func(p proto.RegistrationServer_updateLocalConfiguration_Params) error {
 		if err := p.SetConfig(config); err != nil {
 			return err
 		}
@@ -194,8 +216,8 @@ func (c RegistrationServer_PogsClient) SendLocalConfiguration(ctx context.Contex
 }
 
 func (c RegistrationServer_PogsClient) UnregisterConnection(ctx context.Context) error {
-	client := tunnelrpc.TunnelServer{Client: c.Client}
-	promise := client.UnregisterConnection(ctx, func(p tunnelrpc.RegistrationServer_unregisterConnection_Params) error {
+	client := proto.TunnelServer{Client: c.Client}
+	promise := client.UnregisterConnection(ctx, func(p proto.RegistrationServer_unregisterConnection_Params) error {
 		return nil
 	})
 	_, err := promise.Struct()
@@ -225,20 +247,20 @@ type TunnelAuth struct {
 	TunnelSecret []byte
 }
 
-func (p *ConnectionOptions) MarshalCapnproto(s tunnelrpc.ConnectionOptions) error {
-	return pogs.Insert(tunnelrpc.ConnectionOptions_TypeID, s.Struct, p)
+func (p *ConnectionOptions) MarshalCapnproto(s proto.ConnectionOptions) error {
+	return pogs.Insert(proto.ConnectionOptions_TypeID, s.Struct, p)
 }
 
-func (p *ConnectionOptions) UnmarshalCapnproto(s tunnelrpc.ConnectionOptions) error {
-	return pogs.Extract(p, tunnelrpc.ConnectionOptions_TypeID, s.Struct)
+func (p *ConnectionOptions) UnmarshalCapnproto(s proto.ConnectionOptions) error {
+	return pogs.Extract(p, proto.ConnectionOptions_TypeID, s.Struct)
 }
 
-func (a *TunnelAuth) MarshalCapnproto(s tunnelrpc.TunnelAuth) error {
-	return pogs.Insert(tunnelrpc.TunnelAuth_TypeID, s.Struct, a)
+func (a *TunnelAuth) MarshalCapnproto(s proto.TunnelAuth) error {
+	return pogs.Insert(proto.TunnelAuth_TypeID, s.Struct, a)
 }
 
-func (a *TunnelAuth) UnmarshalCapnproto(s tunnelrpc.TunnelAuth) error {
-	return pogs.Extract(a, tunnelrpc.TunnelAuth_TypeID, s.Struct)
+func (a *TunnelAuth) UnmarshalCapnproto(s proto.TunnelAuth) error {
+	return pogs.Extract(a, proto.TunnelAuth_TypeID, s.Struct)
 }
 
 type ConnectionDetails struct {
@@ -247,7 +269,7 @@ type ConnectionDetails struct {
 	TunnelIsRemotelyManaged bool
 }
 
-func (details *ConnectionDetails) MarshalCapnproto(s tunnelrpc.ConnectionDetails) error {
+func (details *ConnectionDetails) MarshalCapnproto(s proto.ConnectionDetails) error {
 	if err := s.SetUuid(details.UUID[:]); err != nil {
 		return err
 	}
@@ -259,7 +281,7 @@ func (details *ConnectionDetails) MarshalCapnproto(s tunnelrpc.ConnectionDetails
 	return nil
 }
 
-func (details *ConnectionDetails) UnmarshalCapnproto(s tunnelrpc.ConnectionDetails) error {
+func (details *ConnectionDetails) UnmarshalCapnproto(s proto.ConnectionDetails) error {
 	uuidBytes, err := s.Uuid()
 	if err != nil {
 		return err
@@ -277,7 +299,7 @@ func (details *ConnectionDetails) UnmarshalCapnproto(s tunnelrpc.ConnectionDetai
 	return err
 }
 
-func MarshalError(s tunnelrpc.ConnectionError, err error) error {
+func MarshalError(s proto.ConnectionError, err error) error {
 	if err := s.SetCause(err.Error()); err != nil {
 		return err
 	}
