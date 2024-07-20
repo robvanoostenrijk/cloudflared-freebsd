@@ -1,0 +1,70 @@
+name: Build & Upload Artifacts
+on:
+  push:
+    tags:
+      - '*'
+jobs:
+  build-container-and-deploy:
+    runs-on: ubuntu-latest
+    name: Build cloudflared for FreeBSD
+    if: github.event_name == 'push'
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build
+        shell: bash
+        run: |
+          # Disable FIPS module in go-boring
+          export GOEXPERIMENT=noboringcrypto
+          export CGO_ENABLED=0
+
+          echo "#### SHA256 Checksums:" > /tmp/release.txt
+
+          linuxArchs=("386" "amd64" "arm" "armhf" "arm64")
+          export TARGET_OS=linux
+          for arch in ${linuxArchs[@]}; do
+              unset TARGET_ARM
+              export TARGET_ARCH=$arch
+
+              ## Support for arm platforms without hardware FPU enabled
+              if [[ $arch == arm ]] ; then
+                  export TARGET_ARCH=arm
+                  export TARGET_ARM=5
+              fi
+              
+              ## Support for armhf builds 
+              if [[ $arch == armhf ]] ; then
+                  export TARGET_ARCH=arm
+                  export TARGET_ARM=7
+              fi
+
+              make cloudflared
+              mv ./cloudflared /tmp/cloudflared-linux-$arch
+              echo "    cloudflared-linux-$arch: $(sha256sum /tmp/cloudflared-linux-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
+          done
+
+          patch -p1 < freebsd.patch
+
+          freebsdArchs=("386" "amd64" "arm" "arm64")
+          export TARGET_OS=freebsd
+
+          for arch in ${freebsdArchs[@]}; do
+            export TARGET_ARCH=$arch
+
+            echo "Building cloudflared-freebsd-$arch"
+
+            make cloudflared
+            mv ./cloudflared /tmp/cloudflared-freebsd-$arch
+
+            echo "    cloudflared-freebsd-$arch: $(sha256sum /tmp/cloudflared-freebsd-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
+          done
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/release.txt
+          files: |
+            /tmp/cloudflared-*
