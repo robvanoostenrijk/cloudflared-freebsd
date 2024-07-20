@@ -1,0 +1,30 @@
+diff --git a/diagnostic/network/collector_unix.go b/diagnostic/network/collector_unix.go
+index 2db2d262..94bfaa15 100644
+--- a/diagnostic/network/collector_unix.go
++++ b/diagnostic/network/collector_unix.go
+@@ -1,4 +1,4 @@
+-//go:build darwin || linux
++//go:build darwin || linux || freebsd
+ 
+ package diagnostic
+ 
+diff --git a/diagnostic/network/collector_unix_test.go b/diagnostic/network/collector_unix_test.go
+index 5ec231a3..5d52c591 100644
+--- a/diagnostic/network/collector_unix_test.go
++++ b/diagnostic/network/collector_unix_test.go
+@@ -1,4 +1,4 @@
+-//go:build darwin || linux
++//go:build darwin || linux || freebsd
+ 
+ package diagnostic_test
+ 
+diff --git a/diagnostic/system_collector_macos.go b/diagnostic/system_collector_macos.go
+index 2f5ac740..cfd38a42 100644
+--- a/diagnostic/system_collector_macos.go
++++ b/diagnostic/system_collector_macos.go
+@@ -1,4 +1,4 @@
+-//go:build darwin
++//go:build darwin || freebsd
+ 
+ package diagnostic
+ 
