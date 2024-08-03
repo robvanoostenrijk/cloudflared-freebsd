@@ -37,12 +37,49 @@ jobs:
 
             echo "    cloudflared-freebsd-$arch: $(sha256sum /tmp/cloudflared-freebsd-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
           done
+
+          linuxArchs=("386" "amd64" "arm" "armhf" "arm64")
+          export TARGET_OS=linux
+          for arch in ${linuxArchs[@]}; do
+              unset TARGET_ARM
+              export TARGET_ARCH=$arch
+
+              ## Support for arm platforms without hardware FPU enabled
+              if [[ $arch == arm ]] ; then
+                  export TARGET_ARCH=arm
+                  export TARGET_ARM=5
+              fi
+              
+              ## Support for armhf builds 
+              if [[ $arch == armhf ]] ; then
+                  export TARGET_ARCH=arm
+                  export TARGET_ARM=7
+              fi
+              
+              make cloudflared-deb
+              mv cloudflared\_$VERSION\_$arch.deb /tmp/cloudflared-linux-$arch.deb
+              echo "    cloudflared-linux-$arch.deb: $(sha256sum /tmp/cloudflared-linux-$arch.deb | cut -d ' ' -f 1)" >> /tmp/release.txt
+
+              # rpm packages invert the - and _ and use x86_64 instead of amd64.
+              RPMVERSION=$(echo $VERSION|sed -r 's/-/_/g')
+              RPMARCH=$arch
+              if [ $arch == "amd64" ];then
+                  RPMARCH="x86_64"
+              fi
+              if [ $arch == "arm64" ]; then
+                  RPMARCH="aarch64"
+              fi
+              make cloudflared-rpm
+              mv cloudflared-$RPMVERSION-1.$RPMARCH.rpm /tmp/cloudflared-linux-$RPMARCH.rpm
+              echo "    cloudflared-linux-$RPMARCH.rpm: $(sha256sum /tmp/cloudflared-linux-$RPMARCH.rpm | cut -d ' ' -f 1)" >> /tmp/release.txt
+
+              # finally move the linux binary as well.
+              mv ./cloudflared /tmp/cloudflared-linux-$arch
+              echo "    cloudflared-linux-$arch: $(sha256sum /tmp/cloudflared-linux-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
+          done
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           body_path: /tmp/release.txt
           files: |
-            /tmp/cloudflared-freebsd-386
-            /tmp/cloudflared-freebsd-amd64
-            /tmp/cloudflared-freebsd-arm
-            /tmp/cloudflared-freebsd-arm64
+            /tmp/cloudflared-*
