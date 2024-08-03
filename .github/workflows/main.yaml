@@ -56,6 +56,7 @@ jobs:
                   export TARGET_ARM=7
               fi
 
+              make cloudflared
               mv ./cloudflared /tmp/cloudflared-linux-$arch
               echo "    cloudflared-linux-$arch: $(sha256sum /tmp/cloudflared-linux-$arch | cut -d ' ' -f 1)" >> /tmp/release.txt
           done
